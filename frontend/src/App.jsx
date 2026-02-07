@@ -7,7 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Friends from "./pages/Friends";
 import FriendRequests from "./pages/FriendRequests";
 import Chat from "./pages/Chat";
-import Profile from "./pages/Profile";
+import Profile from "./pages/profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
