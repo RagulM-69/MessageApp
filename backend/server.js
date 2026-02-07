@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
+require("dotenv").config(); // Load environment variables
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/user");
@@ -23,66 +24,48 @@ app.use("/api/user", userRoutes);
 app.use("/api/friend", friendRoutes);
 app.use("/api/message", messageRoutes);
 
-// MongoDB
+// MongoDB connection
 mongoose
-  .connect(
-    "mongodb+srv://Ragul:Zbu3GXcHJnzOEsqa@kuvacluster.ugytzfa.mongodb.net/thavakai"
-  )
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected ✅"))
-  .catch((err) => console.error(err));
+  .catch((err) => console.error("MongoDB connection error:", err));
 
+// Basic test route
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
 // ----------- SOCKET.IO -----------
 const io = new Server(server, { cors: { origin: "*" } });
-
-// Keep track of online users
 let onlineUsers = {};
 
 io.on("connection", (socket) => {
-  console.log("A user connected: " + socket.id);
+  console.log("A user connected:", socket.id);
 
   // Save userId with socket
   socket.on("join", (userId) => {
     onlineUsers[userId] = socket.id;
-    console.log("Online Users:", onlineUsers);
   });
 
-  // Friend request sent
+  // Friend request events
   socket.on("friendRequestSent", ({ recipientId }) => {
     const recipientSocket = onlineUsers[recipientId];
     if (recipientSocket) io.to(recipientSocket).emit("newFriendRequest");
   });
 
-  // Friend request accepted
   socket.on("friendAccepted", ({ userId }) => {
     const userSocket = onlineUsers[userId];
     if (userSocket) io.to(userSocket).emit("friendAccepted");
   });
 
-  // Sending a chat message
-  socket.on("sendMessage", async ({ senderId, recipientId, text }) => {
+  // Message events
+  socket.on("sendMessage", ({ senderId, recipientId, text }) => {
     const recipientSocket = onlineUsers[recipientId];
-
-    // Save message in DB
-    const Message = require("./models/Message");
-    try {
-      const message = await Message.create({ sender: senderId, recipient: recipientId, text });
-      console.log("Message saved:", message);
-    } catch (err) {
-      console.error("Message save error:", err.message);
-    }
-
-    // Emit real-time message
-    if (recipientSocket) {
-      io.to(recipientSocket).emit("receiveMessage", { senderId, text });
-    }
+    if (recipientSocket) io.to(recipientSocket).emit("receiveMessage", { senderId, text });
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected: " + socket.id);
+    console.log("User disconnected:", socket.id);
     for (let key in onlineUsers) {
       if (onlineUsers[key] === socket.id) delete onlineUsers[key];
     }
@@ -90,6 +73,7 @@ io.on("connection", (socket) => {
 });
 
 // Start server
-server.listen(5000, () => {
-  console.log("Server running on port 5000 with Socket.IO 🚀");
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT} with Socket.IO 🚀`);
 });
