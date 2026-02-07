@@ -1,11 +1,12 @@
 // backend/server.js
+require("dotenv").config(); // Must be first line
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-require("dotenv").config(); // Load environment variables
 
+// Routes
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/user");
 const friendRoutes = require("./routes/friend");
@@ -24,7 +25,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/friend", friendRoutes);
 app.use("/api/message", messageRoutes);
 
-// MongoDB connection
+// MongoDB Connection
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected ✅"))
@@ -40,14 +41,12 @@ const io = new Server(server, { cors: { origin: "*" } });
 let onlineUsers = {};
 
 io.on("connection", (socket) => {
-  console.log("A user connected:", socket.id);
+  console.log("A user connected: " + socket.id);
 
-  // Save userId with socket
   socket.on("join", (userId) => {
     onlineUsers[userId] = socket.id;
   });
 
-  // Friend request events
   socket.on("friendRequestSent", ({ recipientId }) => {
     const recipientSocket = onlineUsers[recipientId];
     if (recipientSocket) io.to(recipientSocket).emit("newFriendRequest");
@@ -58,14 +57,13 @@ io.on("connection", (socket) => {
     if (userSocket) io.to(userSocket).emit("friendAccepted");
   });
 
-  // Message events
   socket.on("sendMessage", ({ senderId, recipientId, text }) => {
     const recipientSocket = onlineUsers[recipientId];
     if (recipientSocket) io.to(recipientSocket).emit("receiveMessage", { senderId, text });
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    console.log("User disconnected: " + socket.id);
     for (let key in onlineUsers) {
       if (onlineUsers[key] === socket.id) delete onlineUsers[key];
     }
