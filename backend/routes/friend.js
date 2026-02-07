@@ -1,34 +1,70 @@
-// backend/routes/friend.js
 const express = require("express");
 const router = express.Router();
+const auth = require("../middleware/authMiddleware");
 const Friend = require("../models/Friend");
-const authMiddleware = require("../middleware/auth"); // your JWT middleware
 const User = require("../models/User");
 
-// GET accepted friends for logged-in user
-router.get("/accepted", authMiddleware, async (req, res) => {
+// Send friend request
+router.post("/request/:id", auth, async (req, res) => {
   try {
-    const userId = req.user.id; // From auth middleware
+    const recipientId = req.params.id;
 
-    // Find all friendships where status is "accepted"
-    const friends = await Friend.find({
-      $or: [{ requester: userId }, { recipient: userId }],
-      status: "accepted",
-    }).populate([
-      { path: "requester", select: "username _id email" },
-      { path: "recipient", select: "username _id email" },
-    ]);
-
-    // Map to only include the friend (not self)
-    const acceptedFriends = friends.map((f) => {
-      if (f.requester._id.toString() === userId) return f.recipient;
-      return f.requester;
+    const existing = await Friend.findOne({
+      requester: req.user.id,
+      recipient: recipientId,
     });
+    if (existing) return res.status(400).json({ message: "Request already sent" });
 
-    res.json(acceptedFriends);
+    const friendRequest = new Friend({
+      requester: req.user.id,
+      recipient: recipientId,
+      status: "pending",
+    });
+    await friendRequest.save();
+    res.status(201).json(friendRequest);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Accept friend request
+router.post("/accept/:id", auth, async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    const request = await Friend.findById(requestId);
+    if (!request) return res.status(404).json({ message: "Request not found" });
+
+    request.status = "accepted";
+    await request.save();
+    res.json(request);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get all friends
+router.get("/", auth, async (req, res) => {
+  try {
+    const friends = await Friend.find({
+      $or: [{ requester: req.user.id }, { recipient: req.user.id }],
+      status: "accepted",
+    }).populate("requester recipient", "username email");
+    res.json(friends);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get pending requests
+router.get("/requests", auth, async (req, res) => {
+  try {
+    const requests = await Friend.find({
+      recipient: req.user.id,
+      status: "pending",
+    }).populate("requester", "username email");
+    res.json(requests);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
